@@ -1,7 +1,7 @@
 package hk.ust.csit5970;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.*;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -49,10 +49,28 @@ public class BigramFrequencyPairs extends Configured implements Tool {
 				throws IOException, InterruptedException {
 			String line = ((Text) value).toString();
 			String[] words = line.trim().split("\\s+");
-			
+
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			String blank = " "; // make sure (a,*) is the first to be counted
+			if (words.length > 1){
+				String pre_word = words[0];
+				for(int i=1; i<words.length; i++){
+					String w = words[i];
+					if(w.length() == 0){
+						continue;
+					}
+					// count bigram
+					BIGRAM.set(pre_word, w);
+					context.write(BIGRAM, ONE);
+					// count single word(pre word, blank)
+					BIGRAM.set(pre_word, blank);
+					context.write(BIGRAM, ONE);
+					// update prefix
+					pre_word = w;
+				}
+			}
 		}
 	}
 
@@ -64,26 +82,49 @@ public class BigramFrequencyPairs extends Configured implements Tool {
 
 		// Reuse objects.
 		private final static FloatWritable VALUE = new FloatWritable();
+		private int count = 0;
 
 		@Override
 		public void reduce(PairOfStrings key, Iterable<IntWritable> values,
-				Context context) throws IOException, InterruptedException {
+						   Context context) throws IOException, InterruptedException {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			Iterator<IntWritable> iter = values.iterator();
+			int sum = 0;
+			while (iter.hasNext()) {
+				sum += iter.next().get();
+			}
+			if(key.getRightElement().equals(" ")){
+				count = sum;
+				VALUE.set((float) sum);
+				context.write(key, VALUE);
+			}
+			else{
+				float value = (float) sum / count;
+				VALUE.set(value);
+				context.write(key, VALUE);
+			}
 		}
 	}
-	
+
 	private static class MyCombiner extends
 			Reducer<PairOfStrings, IntWritable, PairOfStrings, IntWritable> {
 		private static final IntWritable SUM = new IntWritable();
 
 		@Override
 		public void reduce(PairOfStrings key, Iterable<IntWritable> values,
-				Context context) throws IOException, InterruptedException {
+						   Context context) throws IOException, InterruptedException {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			Iterator<IntWritable> iter = values.iterator();
+			int sum = 0;
+			while (iter.hasNext()) {
+				sum += iter.next().get();
+			}
+			SUM.set(sum);
+			context.write(key, SUM);
 		}
 	}
 
@@ -94,7 +135,7 @@ public class BigramFrequencyPairs extends Configured implements Tool {
 			Partitioner<PairOfStrings, IntWritable> {
 		@Override
 		public int getPartition(PairOfStrings key, IntWritable value,
-				int numReduceTasks) {
+								int numReduceTasks) {
 			return (key.getLeftElement().hashCode() & Integer.MAX_VALUE)
 					% numReduceTasks;
 		}
