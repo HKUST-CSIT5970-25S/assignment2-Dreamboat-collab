@@ -195,16 +195,27 @@ public class CORStripes extends Configured implements Tool {
 				throws IOException, InterruptedException {
 
 			// 使用更高效的Entry遍历方式
-			Map<String, Integer> cooccurrenceCounts = new HashMap<>();
+			Map<String, Integer> cooccurrenceCounts = new HashMap<String, Integer>();
 			int documentCount = 0;
 
 			// 阶段1：聚合共现计数
 			for (MapWritable valueMap : values) {
 				documentCount++;
-				for (Map.Entry<Writable, Writable> entry : valueMap.entrySet()) {
-					String coWord = entry.getKey().toString();
-					int count = ((IntWritable) entry.getValue()).get();
-					cooccurrenceCounts.merge(coWord, count, Integer::sum);
+				// 显式声明迭代器（替代增强型for循环）
+				Iterator<Map.Entry<Writable, Writable>> iterator = valueMap.entrySet().iterator();
+				while (iterator.hasNext()) {
+					Map.Entry<Writable, Writable> entry = iterator.next();
+					Writable key1 = entry.getKey();
+					Writable value = entry.getValue();
+					String coWord = key1.toString();
+					int count = ((IntWritable) value).get();
+
+					// 手动实现 merge 逻辑（替代Java 8的merge方法）
+					if (cooccurrenceCounts.containsKey(coWord)) {
+						cooccurrenceCounts.put(coWord, cooccurrenceCounts.get(coWord) + count);
+					} else {
+						cooccurrenceCounts.put(coWord, count);
+					}
 				}
 			}
 
@@ -218,7 +229,8 @@ public class CORStripes extends Configured implements Tool {
 			for (Map.Entry<String, Integer> entry : cooccurrenceCounts.entrySet()) {
 				String coWord = entry.getKey();
 				int cooccurrenceFreq = entry.getValue();
-				int totalFreq = word_total_map.getOrDefault(coWord, 0);
+				Integer totalFreqObj = word_total_map.get(coWord);
+				int totalFreq = (totalFreqObj != null) ? totalFreqObj : 0;
 
 				if (totalFreq > 0) {
 					double correlation = cooccurrenceFreq / (documentCount * (double) totalFreq);

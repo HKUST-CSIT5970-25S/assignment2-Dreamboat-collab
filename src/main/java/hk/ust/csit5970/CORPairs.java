@@ -99,29 +99,42 @@ public class CORPairs extends Configured implements Tool {
 		private final static PairOfStrings pair = new PairOfStrings();
 
 		@Override
-		protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-			// Please use this tokenizer! DO NOT implement a tokenizer by yourself!
-			StringTokenizer doc_tokenizer = new StringTokenizer(value.toString().replaceAll("[^a-z A-Z]", " "));
-			/*
-			 * TODO: Your implementation goes here.
-			 */
-			List<String> uniqueWords = new ArrayList<>();
-			while (doc_tokenizer.hasMoreTokens()) {
-				String word = doc_tokenizer.nextToken();
-				if (!word.isEmpty()) {  // 添加空字符串过滤
-					uniqueWords.add(word);
+		protected void map(LongWritable key, Text value, Context context)
+				throws IOException, InterruptedException {
+
+			// 使用显式泛型声明（JDK1.6兼容）
+			StringTokenizer docTokenizer = new StringTokenizer(
+					value.toString().replaceAll("[^a-zA-Z ]", " ")  // 修正正则表达式格式
+			);
+
+			// 使用原始集合类型声明
+			HashSet<String> uniqueWords = new HashSet<String>();
+
+			// 传统while循环遍历tokenizer
+			while (docTokenizer.hasMoreTokens()) {
+				String token = docTokenizer.nextToken().toLowerCase();
+				if (token.length() > 0) {  // 替代Java 8的!isEmpty()
+					uniqueWords.add(token);
 				}
 			}
-			List<String> distinctSortedWords = uniqueWords.stream()
-					.distinct()
-					.sorted()
-					.collect(Collectors.toList());
 
-			for (int i = 0; i < distinctSortedWords.size(); i++) {
-				String first = distinctSortedWords.get(i);
-				for (int j = i + 1; j < distinctSortedWords.size(); j++) {
-					String second = distinctSortedWords.get(j);
-					pair.set(first, second);  // 已排序，无需比较顺序
+			// 集合转数组（JDK1.6兼容写法）
+			String[] totalWords = uniqueWords.toArray(new String[uniqueWords.size()]);
+
+			// 传统双层for循环生成有序词对
+			for (int i = 0; i < totalWords.length; i++) {
+				for (int j = i + 1; j < totalWords.length; j++) {
+					String wordA = totalWords[i];
+					String wordB = totalWords[j];
+
+					// 手动排序词对（不使用Java 8的Comparator）
+					if (wordA.compareTo(wordB) > 0) {
+						String temp = wordA;
+						wordA = wordB;
+						wordB = temp;
+					}
+
+					pair.set(wordA, wordB);
 					context.write(pair, ONE);
 				}
 			}
