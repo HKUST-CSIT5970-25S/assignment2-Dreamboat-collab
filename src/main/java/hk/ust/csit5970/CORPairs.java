@@ -31,6 +31,7 @@ import java.net.URI;
 import java.util.*;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.stream.Collectors;
 
 /**
  * Compute the bigram count using "pairs" approach
@@ -53,6 +54,21 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			while (doc_tokenizer.hasMoreTokens()) {
+				String w = doc_tokenizer.nextToken();
+				if (word_set.containsKey(w)) {
+					word_set.put(w, 1);
+					word_set.put(w, word_set.get(w) + 1);
+				} else {
+					word_set.put(w, word_set.get(w) + 1);
+				}
+			}
+			// Sort the word_set
+			Iterator<Map.Entry<String, Integer>> iterator = word_set.entrySet().iterator();
+			while(iterator.hasNext()) {
+				Map.Entry<String, Integer> entry = iterator.next();
+				context.write(new Text(entry.getKey()), new IntWritable(entry.getValue()));
+			}
 		}
 	}
 
@@ -66,6 +82,11 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int sum = 0;
+			for(IntWritable c : values){
+				sum += c.get();
+			}
+			context.write(key, new IntWritable(sum));
 		}
 	}
 
@@ -74,6 +95,9 @@ public class CORPairs extends Configured implements Tool {
 	 * TODO: Write your second-pass Mapper here.
 	 */
 	public static class CORPairsMapper2 extends Mapper<LongWritable, Text, PairOfStrings, IntWritable> {
+		private final static IntWritable ONE = new IntWritable(1);
+		private final static PairOfStrings pair = new PairOfStrings();
+
 		@Override
 		protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
 			// Please use this tokenizer! DO NOT implement a tokenizer by yourself!
@@ -81,6 +105,26 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			List<String> uniqueWords = new ArrayList<>();
+			while (doc_tokenizer.hasMoreTokens()) {
+				String word = doc_tokenizer.nextToken();
+				if (!word.isEmpty()) {  // 添加空字符串过滤
+					uniqueWords.add(word);
+				}
+			}
+			List<String> distinctSortedWords = uniqueWords.stream()
+					.distinct()
+					.sorted()
+					.collect(Collectors.toList());
+
+			for (int i = 0; i < distinctSortedWords.size(); i++) {
+				String first = distinctSortedWords.get(i);
+				for (int j = i + 1; j < distinctSortedWords.size(); j++) {
+					String second = distinctSortedWords.get(j);
+					pair.set(first, second);  // 已排序，无需比较顺序
+					context.write(pair, ONE);
+				}
+			}
 		}
 	}
 
@@ -93,6 +137,11 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int sum = 0;
+			for (IntWritable count : values) {
+				sum += count.get();
+			}
+			context.write(key, new IntWritable(sum));
 		}
 	}
 
@@ -145,6 +194,17 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int pairCount = 0;
+			for (IntWritable value : values) {
+				pairCount += value.get();
+			}
+
+			Integer freq_A = word_total_map.get(key.getLeftElement());
+			Integer freq_B = word_total_map.get(key.getRightElement());
+			if (freq_A != null && freq_B != null && freq_A > 0 && freq_B > 0) {
+				double correlation = (double) pairCount / (freq_A * freq_B);
+				context.write(key, new DoubleWritable(correlation));
+			}
 		}
 	}
 

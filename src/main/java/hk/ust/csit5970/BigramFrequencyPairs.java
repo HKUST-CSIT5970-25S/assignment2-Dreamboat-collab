@@ -53,7 +53,7 @@ public class BigramFrequencyPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
-			String blank = " "; // make sure (a,*) is the first to be counted
+			String blank = " ";
 			if (words.length > 1){
 				String pre_word = words[0];
 				for(int i=1; i<words.length; i++){

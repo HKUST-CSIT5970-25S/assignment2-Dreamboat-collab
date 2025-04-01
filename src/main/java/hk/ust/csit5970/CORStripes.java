@@ -43,6 +43,20 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			while (doc_tokenizer.hasMoreTokens()) {
+				String word = doc_tokenizer.nextToken();
+
+				if (word_set.containsKey(word)) {
+					word_set.put(word, word_set.get(word) + 1);
+				} else {
+					word_set.put(word, 1);
+				}
+			}
+			Iterator<Map.Entry<String, Integer>> iterator = word_set.entrySet().iterator();
+			while(iterator.hasNext()) {
+				Map.Entry<String, Integer> entry = iterator.next();
+				context.write(new Text(entry.getKey()), new IntWritable(entry.getValue()));
+			}
 		}
 	}
 
@@ -56,6 +70,11 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int sum = 0;
+			for (IntWritable val : values) {
+				sum += val.get();
+			}
+			context.write(key, new IntWritable(sum));
 		}
 	}
 
@@ -75,6 +94,26 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			for (String word : sorted_word_set) {
+				MapWritable cooccurrenceMap = new MapWritable();
+				Text currentWord = new Text(word);
+
+				for (String coWord : sorted_word_set) {
+					if (word.equals(coWord)) continue;  // 提前过滤相同词
+
+					Text coWordKey = new Text(coWord);
+					IntWritable count = (IntWritable) cooccurrenceMap.get(coWordKey);
+
+					if (count != null) {
+						count.set(count.get() + 1);  // 直接修改现有计数器
+					} else {
+						cooccurrenceMap.put(coWordKey, new IntWritable(1));
+					}
+				}
+
+				context.write(currentWord, cooccurrenceMap);
+			}
+
 		}
 	}
 
@@ -89,6 +128,20 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			MapWritable result_writable = new MapWritable();
+			for (MapWritable value : values) {
+				for (Map.Entry<Writable, Writable> entry : value.entrySet()) {
+					IntWritable count = (IntWritable) entry.getValue();
+					IntWritable existingCount = (IntWritable) result_writable.get(entry.getKey());
+					if (existingCount == null) {
+						result_writable.put(entry.getKey(), new IntWritable(count.get()));
+					}
+					else {
+						existingCount.set(existingCount.get() + count.get());
+					}
+				}
+			}
+			context.write(key,result_writable);
 		}
 	}
 
@@ -138,10 +191,42 @@ public class CORStripes extends Configured implements Tool {
 		 * TODO: Write your second-pass Reducer here.
 		 */
 		@Override
-		protected void reduce(Text key, Iterable<MapWritable> values, Context context) throws IOException, InterruptedException {
-			/*
-			 * TODO: Your implementation goes here.
-			 */
+		protected void reduce(Text key, Iterable<MapWritable> values, Context context)
+				throws IOException, InterruptedException {
+
+			// 使用更高效的Entry遍历方式
+			Map<String, Integer> cooccurrenceCounts = new HashMap<>();
+			int documentCount = 0;
+
+			// 阶段1：聚合共现计数
+			for (MapWritable valueMap : values) {
+				documentCount++;
+				for (Map.Entry<Writable, Writable> entry : valueMap.entrySet()) {
+					String coWord = entry.getKey().toString();
+					int count = ((IntWritable) entry.getValue()).get();
+					cooccurrenceCounts.merge(coWord, count, Integer::sum);
+				}
+			}
+
+			// 阶段2：计算并输出相关性指标
+			if (documentCount == 0) return;
+
+			PairOfStrings outputKey = new PairOfStrings();
+			DoubleWritable outputValue = new DoubleWritable();
+			String mainWord = key.toString();
+
+			for (Map.Entry<String, Integer> entry : cooccurrenceCounts.entrySet()) {
+				String coWord = entry.getKey();
+				int cooccurrenceFreq = entry.getValue();
+				int totalFreq = word_total_map.getOrDefault(coWord, 0);
+
+				if (totalFreq > 0) {
+					double correlation = cooccurrenceFreq / (documentCount * (double) totalFreq);
+					outputKey.set(mainWord, coWord);
+					outputValue.set(correlation);
+					context.write(outputKey, outputValue);
+				}
+			}
 		}
 	}
 
