@@ -1,0 +1,5 @@
+====BigramFrePairs==== Mark: 2/2
+====BigramFreStripes==== Mark: 2/2
+====CorPairs==== Mark: 0/3: list index out of range
+====CorStrip==== Mark: 0/3 [line 19: words <['Alexander', 'Abraham', '1.0']> != <['Alexander', 'Bartholomew', '1.0']>]
+====Total Mark: 4/10
